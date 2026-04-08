@@ -111,7 +111,7 @@ const embed = new EmbedBuilder()
     lastPlayers = 0;
 
     const channel = await client.channels.fetch(updateChannelId);
-    const msg = await channel.send("📡 서버 추적 시작...");
+    const msg = await channel.send("📡 Server Tracking Start...");
 
     messageId = msg.id;
 
@@ -139,9 +139,9 @@ setInterval(async () => {
     lastUpdateTime = new Date();
 
     const embed = new EmbedBuilder()
-      .setTitle("🦖 ARK 서버 상태")
+      .setTitle("🦖 ARK Player List")
       .setColor(isOnline ? "Green" : "Red")
-      .setFooter({ text: "자동 업데이트 (60초)" });
+      .setFooter({ text: "Auto Update (60 Second)" });
 
     if (isOnline) {
       const current = server.NumPlayers;
@@ -187,21 +187,21 @@ if (Math.abs(diff) > 0 && nowTime - lastAlertTime > 30000) {
   const isJoin = diff > 0;
 
   const embed = new EmbedBuilder()
-    .setTitle(isJoin ? "🟢 플레이어 입장" : "🔴 플레이어 퇴장")
+    .setTitle(isJoin ? "🟢 Player Join" : "🔴 Player Leave")
     .setDescription(`**${server.SessionName}**`)
     .addFields(
       {
-        name: "👥 Players",
+        name: "👥 Online Players",
         value: `\`\`\`\n${current}/${server.MaxPlayers}\n\`\`\``,
         inline: true,
       },
       {
-        name: "📊 변화량",
+        name: "📊 Change Player",
         value: `\`\`\`\n${isJoin ? `+${diff}` : diff}\n\`\`\``,
         inline: true,
       },
       {
-        name: "⏱ 시간",
+        name: "⏱ Last Update",
         value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
         inline: true,
       }
@@ -220,7 +220,7 @@ if (Math.abs(diff) > 0 && nowTime - lastAlertTime > 30000) {
     } else {
       embed.setDescription("🔴 서버 오프라인")
         .addFields({
-          name: "⏱ 마지막 업데이트",
+          name: "⏱ Last Update",
           value: `<t:${Math.floor(lastUpdateTime.getTime() / 1000)}:R>`
         });
     }
