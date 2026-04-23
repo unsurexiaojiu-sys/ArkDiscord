@@ -76,12 +76,10 @@ const embed = new EmbedBuilder()
     {
       name: "🌍 Day Time",
       value: `\`\`\`\n${server.DayTime || "Unknown"}\n\`\`\``,
-      inline: true,
     },
     {
       name: "🌍 PlatformType",
       value: `\`\`\`\n${PlatformType}\n\`\`\``,
-      inline: true,
     },
     {
       name: "🌐 Server IP",
@@ -90,7 +88,6 @@ const embed = new EmbedBuilder()
     {
       name: "🌐 Server Port",
       value: `\`\`\`\n${server.Port}\n\`\`\``,
-      inline: true,
     }
   )
   .setColor("Blue");
@@ -174,15 +171,13 @@ setInterval(async () => {
             name: "🌍 Map",
             value: `\`\`\`\n${server.MapName}\n\`\`\``,
           },
-                    {
+          {
             name: "🌍 Day Time",
             value: `\`\`\`\n${server.DayTime}\n\`\`\``,
-            inline: true,
           },
           {
           name: "🌍 PlatformType",
           value: `\`\`\`\n${PlatformType}\n\`\`\``,
-          inline: true,
           },
           {
             name: "⏱ 마지막 업데이트",
