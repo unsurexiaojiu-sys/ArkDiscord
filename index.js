@@ -78,10 +78,6 @@ const embed = new EmbedBuilder()
       value: `\`\`\`\n${server.DayTime || "Unknown"}\n\`\`\``,
     },
     {
-      name: "🌍 PlatformType",
-      value: `\`\`\`\n${PlatformType}\n\`\`\``,
-    },
-    {
       name: "🌐 Server IP",
       value: `\`\`\`\n${server.IP}\n\`\`\``,
     },
@@ -174,10 +170,6 @@ setInterval(async () => {
           {
             name: "🌍 Day Time",
             value: `\`\`\`\n${server.DayTime}\n\`\`\``,
-          },
-          {
-          name: "🌍 PlatformType",
-          value: `\`\`\`\n${PlatformType}\n\`\`\``,
           },
           {
             name: "⏱ 마지막 업데이트",
