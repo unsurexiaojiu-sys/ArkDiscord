@@ -73,11 +73,11 @@ const MAP_NAMES = {
 };
 
 // =========================
-// 맵 서버 검색
+// 서버 번호 검색
 // =========================
 
-function findServersByMap(list, mapName) {
-  return list.filter(
+function findServer(list, number) {
+  return list.find(
     (s) =>
       s.Name &&
       s.Name.includes("PVP") &&
@@ -87,26 +87,13 @@ function findServersByMap(list, mapName) {
       !s.Name.includes("Modded") &&
       !s.Name.includes("Consoles") &&
       !s.Name.includes("Arkpocalypse") &&
-      s.MapName &&
-      s.MapName.toLowerCase() ===
-        mapName.toLowerCase()
+      !s.Name.includes("SOTFSolos") &&
+      s.Name.endsWith(number)
   );
 }
 
 // =========================
-// 공식 서버 배율
-// =========================
-
-let rates = {
-  xp: 1,
-  harvest: 1,
-  taming: 1,
-  breeding: 1,
-  hatch: 1,
-};
-
-// =========================
-// 서버 필터
+// 맵 서버 검색
 // =========================
 
 function findServersByMap(list, mapName) {
@@ -120,12 +107,11 @@ function findServersByMap(list, mapName) {
       s.Name.includes("Modded") ||
       s.Name.includes("Arkpocalypse") ||
       s.Name.includes("Consoles") ||
-      s.Name.includes("SOTFSolos")   
-    ){
+      s.Name.includes("SOTFSolos")
+    ) {
       return false;
     }
 
-    // MapName 없으면 제외
     if (!s.MapName) return false;
 
     const apiMap = s.MapName
@@ -139,6 +125,18 @@ function findServersByMap(list, mapName) {
     return apiMap.includes(targetMap);
   });
 }
+
+// =========================
+// 공식 서버 배율
+// =========================
+
+let rates = {
+  xp: 1,
+  harvest: 1,
+  taming: 1,
+  breeding: 1,
+  hatch: 1,
+};
 
 // =========================
 // 공식 배율 가져오기
@@ -945,20 +943,23 @@ setInterval(async () => {
         updateChannelId
       );
 
-    const msg =
-      await channel.messages.fetch(
-        messageId
-      );
-
-    await msg.edit({
-      embeds: [embed],
-    });
-  } catch (err) {
-    console.error(
-      "❌ 업데이트 오류:",
-      err.message
+try {
+  const msg =
+    await channel.messages.fetch(
+      messageId
     );
-  }
+
+  if (!msg) return;
+
+  await msg.edit({
+    embeds: [embed],
+  });
+} catch (err) {
+  console.error(
+    "❌ 메시지 수정 실패:",
+    err.message
+  );
+}
 }, 60000);
 
 // =========================
