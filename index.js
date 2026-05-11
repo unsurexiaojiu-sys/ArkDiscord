@@ -1,5 +1,6 @@
 require("dotenv").config();
 const axios = require("axios");
+
 const {
   Client,
   GatewayIntentBits,
@@ -10,8 +11,35 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-const API_URL = "https://cdn2.arkdedicated.com/servers/asa/officialserverlist.json";
-const ALERT_CHANNEL_ID = process.env.ALERT_CHANNEL_ID;
+// =========================
+// URL
+// =========================
+
+const API_URL =
+  "https://cdn2.arkdedicated.com/servers/asa/officialserverlist.json";
+
+const CONFIG_URL =
+  "https://cdn2.arkdedicated.com/asa/dynamicconfig.ini";
+
+const NOTIFICATION_URL =
+  "https://cdn2.arkdedicated.com/asa/notification.html";
+
+const BANLIST_URL =
+  "https://cdn2.arkdedicated.com/asa/BanList.txt";
+
+// =========================
+// ENV
+// =========================
+
+const ALERT_CHANNEL_ID =
+  process.env.ALERT_CHANNEL_ID;
+
+const NOTIFICATION_CHANNEL_ID =
+  process.env.NOTIFICATION_CHANNEL_ID;
+
+// =========================
+// 상태 변수
+// =========================
 
 let trackedServerNumber = null;
 let updateChannelId = null;
@@ -21,216 +49,720 @@ let lastPlayers = 0;
 let lastAlertTime = 0;
 let lastUpdateTime = null;
 
-client.once("ready", () => {
-  console.log(`✅ 로그인됨: ${client.user.tag}`);
-});
+let lastNotification = null;
 
-// 🔍 서버 필터
+let maintenanceState = false;
+
+// 이미 감지한 밴 저장
+const knownBans = new Set();
+
+// =========================
+// 공식 서버 배율
+// =========================
+
+let rates = {
+  xp: 1,
+  harvest: 1,
+  taming: 1,
+  breeding: 1,
+  hatch: 1,
+};
+
+// =========================
+// 서버 필터
+// =========================
+
 function findServer(list, number) {
-  return list.find(s =>
-    s.Name &&
-    s.Name.includes("PVP") &&
-    !s.Name.includes("SmallTribes") &&
-    !s.Name.includes("PVE") &&
-    !s.Name.includes("Conquest") &&
-    !s.Name.includes("Modded") &&
-    s.Name.endsWith(number)
+  return list.find(
+    (s) =>
+      s.Name &&
+      s.Name.includes("PVP") &&
+      !s.Name.includes("SmallTribes") &&
+      !s.Name.includes("PVE") &&
+      !s.Name.includes("Conquest") &&
+      !s.Name.includes("Modded") &&
+      s.Name.endsWith(number)
   );
 }
 
-// 🎮 명령어 처리
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
+// =========================
+// 공식 배율 가져오기
+// =========================
 
-  // 📡 조회
-  if (interaction.commandName === "조회") {
-    const number = interaction.options.getString("서버번호");
-    const res = await axios.get(API_URL);
-    const server = findServer(res.data, number);
+async function updateRates() {
+  try {
+    const res = await axios.get(CONFIG_URL);
 
-    if (!server) return interaction.reply("❌ 서버 없음");
+    const text = res.data;
 
-const embed = new EmbedBuilder()
-  .setTitle("🔍 서버 조회")
-  .setDescription(`**${server.SessionName}**`)
-  .addFields(
-    {
-      name: "👥 Players",
-      value: `\`\`\`\n${server.NumPlayers}/${server.MaxPlayers}\n\`\`\``,
-      inline: true,
-    },
-    {
-      name: "🟢 State",
-      value: `\`\`\`\n🟢Online\n\`\`\``,
-      inline: true,
-    },
-    {
-      name: "🌐 Ping",
-      value: `\`\`\`\n${server.ServerPing || 0}\n\`\`\``,
-      inline: true,
-    },
-    {
-      name: "🌍 Map",
-      value: `\`\`\`\n${server.MapName}\n\`\`\``,
-    },
-    {
-      name: "🌍 Day Time",
-      value: `\`\`\`\n${server.DayTime || "Unknown"}\n\`\`\``,
-    },
-    {
-      name: "🌐 Server IP",
-      value: `\`\`\`\n${server.IP}\n\`\`\``,
-    },
-    {
-      name: "🌐 Server Port",
-      value: `\`\`\`\n${server.Port}\n\`\`\``,
+    const getValue = (key) => {
+      const match = text.match(
+        new RegExp(`${key}=([0-9.]+)`)
+      );
+
+      return match ? match[1] : "1";
+    };
+
+    rates = {
+      xp: getValue("XPMultiplier"),
+      harvest: getValue(
+        "HarvestAmountMultiplier"
+      ),
+      taming: getValue(
+        "TamingSpeedMultiplier"
+      ),
+      breeding: getValue(
+        "BabyMatureSpeedMultiplier"
+      ),
+      hatch: getValue(
+        "EggHatchSpeedMultiplier"
+      ),
+    };
+
+    console.log(
+      "✅ 배율 업데이트 완료",
+      rates
+    );
+  } catch (err) {
+    console.error(
+      "❌ 배율 불러오기 실패:",
+      err.message
+    );
+  }
+}
+
+// =========================
+// 공식 공지 감지
+// =========================
+
+async function checkNotifications() {
+  try {
+    const res = await axios.get(
+      NOTIFICATION_URL
+    );
+
+    const html = res.data;
+
+    const text = html
+      .replace(/<[^>]*>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!text || text.length < 5)
+      return;
+
+    // 최초 실행
+    if (!lastNotification) {
+      lastNotification = text;
+
+      console.log(
+        "📢 최초 공지 저장 완료"
+      );
+
+      return;
     }
-  )
-  .setColor("Blue");
 
-    return interaction.reply({ embeds: [embed] });
+    // 새 공지 감지
+    if (text !== lastNotification) {
+      console.log(
+        "📢 새로운 공지 감지"
+      );
+
+      const channel =
+        await client.channels.fetch(
+          NOTIFICATION_CHANNEL_ID
+        );
+
+      const lowerText =
+        text.toLowerCase();
+
+      // =========================
+      // 점검 시작 감지
+      // =========================
+
+      const maintenanceKeywords = [
+        "maintenance",
+        "servers will go down",
+        "deploying patch",
+        "offline",
+        "downtime",
+      ];
+
+      if (
+        !maintenanceState &&
+        maintenanceKeywords.some((k) =>
+          lowerText.includes(k)
+        )
+      ) {
+        maintenanceState = true;
+
+        const embed =
+          new EmbedBuilder()
+            .setTitle(
+              "🛠 ARK 공식 서버 점검 시작"
+            )
+            .setDescription(text)
+            .setColor(0xed4245)
+            .setTimestamp();
+
+        await channel.send({
+          content: "@everyone",
+          embeds: [embed],
+        });
+      }
+
+      // =========================
+      // 점검 종료 감지
+      // =========================
+
+      const recoveryKeywords = [
+        "maintenance completed",
+        "back online",
+        "online again",
+        "servers are back",
+        "servers restored",
+      ];
+
+      if (
+        maintenanceState &&
+        recoveryKeywords.some((k) =>
+          lowerText.includes(k)
+        )
+      ) {
+        maintenanceState = false;
+
+        const embed =
+          new EmbedBuilder()
+            .setTitle(
+              "✅ ARK 공식 서버 점검 종료"
+            )
+            .setDescription(text)
+            .setColor(0x57f287)
+            .setTimestamp();
+
+        await channel.send({
+          content: "@everyone",
+          embeds: [embed],
+        });
+      }
+
+      // =========================
+      // 일반 공지
+      // =========================
+
+      const embed = new EmbedBuilder()
+        .setTitle("📢 ARK 공식 공지")
+        .setDescription(text)
+        .setColor(0xf1c40f)
+        .setFooter({
+          text: "ARK Official Notification",
+        })
+        .setTimestamp();
+
+      await channel.send({
+        embeds: [embed],
+      });
+
+      lastNotification = text;
+    }
+  } catch (err) {
+    console.error(
+      "❌ 공지 확인 실패:",
+      err.message
+    );
   }
+}
 
-  // 📺 채널 설정
-  if (interaction.commandName === "채널설정") {
-    const channel = interaction.options.getChannel("채널");
-    updateChannelId = channel.id;
+// =========================
+// 밴 리스트 감지
+// =========================
 
-    return interaction.reply(`✅ 채널 설정 완료: ${channel}`);
-  }
+async function checkBanList() {
+  try {
+    const res = await axios.get(
+      BANLIST_URL
+    );
 
-  // 📌 등록
-  if (interaction.commandName === "등록") {
-    if (!updateChannelId) {
-      return interaction.reply("❌ 먼저 /채널설정 해줘");
+    const text = res.data;
+
+    const lines = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    // 최초 실행
+    if (knownBans.size === 0) {
+      lines.forEach((line) =>
+        knownBans.add(line)
+      );
+
+      console.log(
+        `🔨 밴 리스트 초기화 완료 (${lines.length}명)`
+      );
+
+      return;
     }
 
-    trackedServerNumber = interaction.options.getString("서버번호");
-    lastPlayers = 0;
+    // 신규 밴 감지
+    const newBans = [];
 
-    const channel = await client.channels.fetch(updateChannelId);
-    const msg = await channel.send("📡 Server Tracking Start...");
+    for (const line of lines) {
+      if (!knownBans.has(line)) {
+        knownBans.add(line);
 
-    messageId = msg.id;
+        newBans.push(line);
+      }
+    }
 
-    return interaction.reply("✅ 서버 추적 시작됨");
+    // 신규 밴 없으면 종료
+    if (newBans.length === 0) return;
+
+    console.log(
+      `🔨 신규 밴 감지 (${newBans.length}명)`
+    );
+
+    const channel =
+      await client.channels.fetch(
+        NOTIFICATION_CHANNEL_ID
+      );
+
+    const embed = new EmbedBuilder()
+      .setTitle(
+        "🔨 ARK 신규 글로벌 밴 감지"
+      )
+      .setDescription(
+        newBans
+          .slice(0, 20)
+          .map(
+            (ban) =>
+              `• https://steamcommunity.com/profiles/${ban}`
+          )
+          .join("\n")
+      )
+      .addFields(
+        {
+          name: "📊 신규 밴 수",
+          value: `\`\`\`\n${newBans.length}\n\`\`\``,
+          inline: true,
+        },
+        {
+          name: "📦 전체 저장 수",
+          value: `\`\`\`\n${knownBans.size}\n\`\`\``,
+          inline: true,
+        }
+      )
+      .setColor(0xed4245)
+      .setFooter({
+        text: "ARK Global Ban Detection",
+      })
+      .setTimestamp();
+
+    await channel.send({
+      embeds: [embed],
+    });
+  } catch (err) {
+    console.error(
+      "❌ 밴 리스트 확인 실패:",
+      err.message
+    );
   }
+}
 
-  // ❌ 해제
-  if (interaction.commandName === "해제") {
-    trackedServerNumber = null;
-    messageId = null;
+// =========================
+// 봇 시작
+// =========================
 
-    return interaction.reply("🛑 서버 추적 중지됨");
-  }
+client.once("ready", async () => {
+  console.log(
+    `✅ 로그인됨: ${client.user.tag}`
+  );
+
+  await updateRates();
+
+  await checkNotifications();
+
+  await checkBanList();
 });
 
-// 🔄 자동 업데이트
+// =========================
+// 명령어 처리
+// =========================
+
+client.on(
+  "interactionCreate",
+  async (interaction) => {
+    if (!interaction.isChatInputCommand())
+      return;
+
+    // =========================
+    // 조회
+    // =========================
+
+    if (interaction.commandName === "조회") {
+      try {
+        const number =
+          interaction.options.getString(
+            "서버번호"
+          );
+
+        const res = await axios.get(
+          API_URL
+        );
+
+        const server = findServer(
+          res.data,
+          number
+        );
+
+        if (!server) {
+          return interaction.reply(
+            "❌ 서버 없음"
+          );
+        }
+
+        const embed =
+          new EmbedBuilder()
+            .setTitle("🔍 서버 조회")
+            .setDescription(
+              `**${server.SessionName}**`
+            )
+            .addFields(
+              {
+                name: "👥 Players",
+                value:
+                  `\`\`\`\n${server.NumPlayers}` +
+                  `/${server.MaxPlayers}\n\`\`\``,
+                inline: true,
+              },
+              {
+                name: "🟢 State",
+                value:
+                  "```yaml\n🟢 Online\n```",
+                inline: true,
+              },
+              {
+                name: "🌐 Ping",
+                value:
+                  `\`\`\`\n${server.ServerPing || 0}\n\`\`\``,
+                inline: true,
+              },
+              {
+                name: "🌍 Map",
+                value:
+                  `\`\`\`\n${server.MapName}\n\`\`\``,
+              },
+              {
+                name: "☀️ Day Time",
+                value:
+                  `\`\`\`\n${server.DayTime || "Unknown"}\n\`\`\``,
+                inline: true,
+              },
+              {
+                name: "🎮 Platform",
+                value:
+                  `\`\`\`\n${server.PlatformType || "Unknown"}\n\`\`\``,
+                inline: true,
+              },
+              {
+                name: "⚡ Rates",
+                value:
+                  "```yaml\n" +
+                  `XP: x${rates.xp}\n` +
+                  `Harvest: x${rates.harvest}\n` +
+                  `Taming: x${rates.taming}\n` +
+                  `Breed: x${rates.breeding}\n` +
+                  `Hatch: x${rates.hatch}\n` +
+                  "```",
+              },
+              {
+                name: "🌐 Server IP",
+                value:
+                  `\`\`\`\n${server.IP}\n\`\`\``,
+              },
+              {
+                name: "🌐 Server Port",
+                value:
+                  `\`\`\`\n${server.Port}\n\`\`\``,
+                inline: true,
+              }
+            )
+            .setColor("Blue")
+            .setTimestamp();
+
+        return interaction.reply({
+          embeds: [embed],
+        });
+      } catch (err) {
+        console.error(err);
+
+        return interaction.reply(
+          "❌ 조회 실패"
+        );
+      }
+    }
+
+    // =========================
+    // 채널 설정
+    // =========================
+
+    if (
+      interaction.commandName ===
+      "채널설정"
+    ) {
+      const channel =
+        interaction.options.getChannel(
+          "채널"
+        );
+
+      updateChannelId = channel.id;
+
+      return interaction.reply(
+        `✅ 업데이트 채널 설정 완료: ${channel}`
+      );
+    }
+
+    // =========================
+    // 등록
+    // =========================
+
+    if (interaction.commandName === "등록") {
+      if (!updateChannelId) {
+        return interaction.reply(
+          "❌ 먼저 /채널설정 해줘"
+        );
+      }
+
+      trackedServerNumber =
+        interaction.options.getString(
+          "서버번호"
+        );
+
+      lastPlayers = 0;
+
+      const channel =
+        await client.channels.fetch(
+          updateChannelId
+        );
+
+      const msg = await channel.send(
+        "📡 서버 추적 시작..."
+      );
+
+      messageId = msg.id;
+
+      return interaction.reply(
+        `✅ 서버 ${trackedServerNumber} 추적 시작`
+      );
+    }
+
+    // =========================
+    // 해제
+    // =========================
+
+    if (interaction.commandName === "해제") {
+      trackedServerNumber = null;
+      messageId = null;
+
+      return interaction.reply(
+        "🛑 서버 추적 중지됨"
+      );
+    }
+  }
+);
+
+// =========================
+// 서버 상태 자동 업데이트
+// =========================
+
 setInterval(async () => {
-  if (!trackedServerNumber || !updateChannelId || !messageId) return;
+  if (
+    !trackedServerNumber ||
+    !updateChannelId ||
+    !messageId
+  )
+    return;
 
   try {
     const res = await axios.get(API_URL);
-    const server = findServer(res.data, trackedServerNumber);
+
+    const server = findServer(
+      res.data,
+      trackedServerNumber
+    );
 
     const isOnline = !!server;
+
     lastUpdateTime = new Date();
 
     const embed = new EmbedBuilder()
-      .setTitle("🦖 ARK Player List")
+      .setTitle("🦖 ARK 서버 상태")
       .setColor(isOnline ? "Green" : "Red")
-      .setFooter({ text: "Auto Update (60 Second)" });
+      .setFooter({
+        text: "자동 업데이트 (60초)",
+      })
+      .setTimestamp();
 
     if (isOnline) {
       const current = server.NumPlayers;
+
       const diff = current - lastPlayers;
+
       const nowTime = Date.now();
 
-      embed.setDescription(`**${server.Name}**`)
+      embed
+        .setDescription(
+          `**${server.SessionName}**`
+        )
         .addFields(
           {
             name: "👥 Players",
-            value: `\`\`\`\n${current}/${server.MaxPlayers}\n\`\`\``,
+            value:
+              `\`\`\`\n${current}/${server.MaxPlayers}\n\`\`\``,
             inline: true,
           },
           {
             name: "🟢 State",
-            value: `\`\`\`\n🟢Online\n\`\`\``,
+            value:
+              "```yaml\n🟢 Online\n```",
             inline: true,
           },
           {
             name: "🌐 Ping",
-            value: `\`\`\`\n${server.ServerPing}\n\`\`\``,
+            value:
+              `\`\`\`\n${server.ServerPing || 0}\n\`\`\``,
             inline: true,
           },
           {
             name: "🌍 Map",
-            value: `\`\`\`\n${server.MapName}\n\`\`\``,
+            value:
+              `\`\`\`\n${server.MapName}\n\`\`\``,
           },
           {
-            name: "🌍 Day Time",
-            value: `\`\`\`\n${server.DayTime}\n\`\`\``,
+            name: "☀️ Day Time",
+            value:
+              `\`\`\`\n${server.DayTime || "Unknown"}\n\`\`\``,
+            inline: true,
           },
           {
             name: "⏱ 마지막 업데이트",
-            value: `<t:${Math.floor(lastUpdateTime.getTime() / 1000)}:R>`
+            value: `<t:${Math.floor(
+              lastUpdateTime.getTime() /
+                1000
+            )}:R>`,
           }
         );
 
-// 🔔 입장 / 퇴장 알림
-if (Math.abs(diff) > 0 && nowTime - lastAlertTime > 30000) {
-  const alertChannel = await client.channels.fetch(ALERT_CHANNEL_ID);
+      // 플레이어 입장/퇴장 감지
+      if (
+        Math.abs(diff) > 0 &&
+        nowTime - lastAlertTime >
+          30000
+      ) {
+        const alertChannel =
+          await client.channels.fetch(
+            ALERT_CHANNEL_ID
+          );
 
-  const isJoin = diff > 0;
+        const isJoin = diff > 0;
 
-  const embed = new EmbedBuilder()
-    .setTitle(isJoin ? "🟢 Player Join" : "🔴 Player Leave")
-    .setDescription(`**${server.SessionName}**`)
-    .addFields(
-      {
-        name: "👥 Online Players",
-        value: `\`\`\`\n${current}/${server.MaxPlayers}\n\`\`\``,
-        inline: true,
-      },
-      {
-        name: "📊 Change Player",
-        value: `\`\`\`\n${isJoin ? `+${diff}` : diff}\n\`\`\``,
-        inline: true,
-      },
-      {
-        name: "⏱ Last Update",
-        value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
-        inline: true,
+        const alertEmbed =
+          new EmbedBuilder()
+            .setTitle(
+              isJoin
+                ? "🟢 플레이어 입장"
+                : "🔴 플레이어 퇴장"
+            )
+            .setDescription(
+              `**${server.SessionName}**`
+            )
+            .addFields(
+              {
+                name: "👥 Players",
+                value:
+                  `\`\`\`\n${current}/${server.MaxPlayers}\n\`\`\``,
+                inline: true,
+              },
+              {
+                name: "📊 변화량",
+                value:
+                  `\`\`\`\n${
+                    isJoin
+                      ? `+${diff}`
+                      : diff
+                  }\n\`\`\``,
+                inline: true,
+              }
+            )
+            .setColor(
+              isJoin
+                ? 0x57f287
+                : 0xed4245
+            )
+            .setTimestamp();
+
+        await alertChannel.send({
+          embeds: [alertEmbed],
+        });
+
+        lastAlertTime = nowTime;
       }
-    )
-    .setColor(isJoin ? 0x57f287 : 0xed4245)
-    .setFooter({ text: "ARK Server Tracker" })
-    .setTimestamp();
-
-  await alertChannel.send({ embeds: [embed] });
-
-  lastAlertTime = nowTime;
-}
 
       lastPlayers = current;
-
     } else {
-      embed.setDescription("🔴 서버 오프라인")
+      embed
+        .setDescription(
+          "🔴 서버 오프라인"
+        )
         .addFields({
-          name: "⏱ Last Update",
-          value: `<t:${Math.floor(lastUpdateTime.getTime() / 1000)}:R>`
+          name: "⏱ 마지막 업데이트",
+          value: `<t:${Math.floor(
+            lastUpdateTime.getTime() /
+              1000
+          )}:R>`,
         });
     }
 
-    const channel = await client.channels.fetch(updateChannelId);
-    const msg = await channel.messages.fetch(messageId);
+    const channel =
+      await client.channels.fetch(
+        updateChannelId
+      );
 
-    await msg.edit({ embeds: [embed] });
+    const msg =
+      await channel.messages.fetch(
+        messageId
+      );
 
+    await msg.edit({
+      embeds: [embed],
+    });
   } catch (err) {
-    console.error("❌ 업데이트 오류:", err.message);
+    console.error(
+      "❌ 업데이트 오류:",
+      err.message
+    );
   }
-
 }, 60000);
 
-client.login(process.env.DISCORD_BOT_TOKEN);
+// =========================
+// 자동 감시
+// =========================
+
+// 배율 갱신 (12시간)
+setInterval(updateRates, 43200000);
+
+// 공지 감시 (5분)
+setInterval(
+  checkNotifications,
+  300000
+);
+
+// 밴 리스트 감시 (5분)
+setInterval(checkBanList, 300000);
+
+// =========================
+// 로그인
+// =========================
+
+client.login(
+  process.env.DISCORD_BOT_TOKEN
+);
