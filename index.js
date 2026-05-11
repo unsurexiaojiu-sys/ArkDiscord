@@ -748,7 +748,7 @@ setInterval(async () => {
 // =========================
 
 // 배율 갱신 (12시간)
-setInterval(updateRates, 43200000);
+setInterval(updateRates, 300000);
 
 // 공지 감시 (5분)
 setInterval(
