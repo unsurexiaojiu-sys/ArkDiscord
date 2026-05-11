@@ -57,6 +57,41 @@ let maintenanceState = false;
 const knownBans = new Set();
 
 // =========================
+// 맵 이름 매핑
+// =========================
+
+const MAP_NAMES = {
+  TheIsland: "TheIsland",
+  "Scorched Earth": "ScorchedEarth",
+  "The Center": "TheCenter",
+  Aberration: "Aberration",
+  Extinction: "Extinction",
+  Astraeos: "Astraeos",
+  Ragnarok: "Ragnarok",
+  Valguero: "Valguero",
+  "Lost Colony": "LostColony",
+};
+
+// =========================
+// 맵 서버 검색
+// =========================
+
+function findServersByMap(list, mapName) {
+  return list.filter(
+    (s) =>
+      s.Name &&
+      s.Name.includes("PVP") &&
+      !s.Name.includes("SmallTribes") &&
+      !s.Name.includes("PVE") &&
+      !s.Name.includes("Conquest") &&
+      !s.Name.includes("Modded") &&
+      s.MapName &&
+      s.MapName.toLowerCase() ===
+        mapName.toLowerCase()
+  );
+}
+
+// =========================
 // 공식 서버 배율
 // =========================
 
@@ -500,6 +535,114 @@ client.on(
         );
       }
     }
+
+    // =========================
+// 맵 서버리스트
+// =========================
+
+if (interaction.commandName === "맵") {
+  try {
+    const mapInput =
+      interaction.options.getString("맵");
+
+    const mapName =
+      MAP_NAMES[mapInput];
+
+    if (!mapName) {
+      return interaction.reply(
+        "❌ 지원하지 않는 맵"
+      );
+    }
+
+    const res = await axios.get(
+      API_URL
+    );
+
+    const servers =
+      findServersByMap(
+        res.data,
+        mapName
+      );
+
+    if (servers.length === 0) {
+      return interaction.reply(
+        "❌ 서버 없음"
+      );
+    }
+
+    // 서버 번호 순 정렬
+    servers.sort((a, b) => {
+      const aNum = parseInt(
+        a.Name.match(/(\d+)$/)?.[1] || 0
+      );
+
+      const bNum = parseInt(
+        b.Name.match(/(\d+)$/)?.[1] || 0
+      );
+
+      return aNum - bNum;
+    });
+
+    // 서버 목록 생성
+    const serverList = servers
+      .map((server) => {
+        const number =
+          server.Name.match(/(\d+)$/)?.[1] ||
+          "Unknown";
+
+        const players =
+          server.NumPlayers || 0;
+
+        const maxPlayers =
+          server.MaxPlayers || 70;
+
+        const status = "🟢";
+
+        return `${number} ${status} (${players}/${maxPlayers})`;
+      })
+      .join("\n");
+
+    const embed =
+      new EmbedBuilder()
+        .setTitle(
+          `🗺 ${mapInput} 서버 리스트`
+        )
+        .setDescription(
+          "```yaml\n" +
+            serverList +
+            "\n```"
+        )
+        .addFields(
+          {
+            name: "📊 서버 수",
+            value:
+              `\`\`\`\n${servers.length}\n\`\`\``,
+            inline: true,
+          },
+          {
+            name: "🟢 온라인",
+            value:
+              `\`\`\`\n${servers.length}\n\`\`\``,
+            inline: true,
+          }
+        )
+        .setColor(0x3498db)
+        .setFooter({
+          text: "ARK Official PVP Servers",
+        })
+        .setTimestamp();
+
+    return interaction.reply({
+      embeds: [embed],
+    });
+  } catch (err) {
+    console.error(err);
+
+    return interaction.reply(
+      "❌ 맵 서버 리스트 조회 실패"
+    );
+  }
+}
 
     // =========================
     // 채널 설정
