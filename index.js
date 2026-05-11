@@ -7,6 +7,10 @@ const {
   EmbedBuilder,
 } = require("discord.js");
 
+// =========================
+// Discord Client
+// =========================
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
@@ -47,17 +51,27 @@ let messageId = null;
 
 let lastPlayers = 0;
 let lastAlertTime = 0;
-let lastUpdateTime = null;
 
 let lastNotification = null;
 
 let maintenanceState = false;
 
-// 이미 감지한 밴 저장
 const knownBans = new Set();
 
 // =========================
-// 맵 이름 매핑
+// 공식 배율
+// =========================
+
+let rates = {
+  xp: 1,
+  harvest: 1,
+  taming: 1,
+  breeding: 1,
+  hatch: 1,
+};
+
+// =========================
+// 맵 이름
 // =========================
 
 const MAP_NAMES = {
@@ -73,7 +87,7 @@ const MAP_NAMES = {
 };
 
 // =========================
-// 서버 번호 검색
+// 서버 검색
 // =========================
 
 function findServer(list, number) {
@@ -87,7 +101,6 @@ function findServer(list, number) {
       !s.Name.includes("Modded") &&
       !s.Name.includes("Consoles") &&
       !s.Name.includes("Arkpocalypse") &&
-      !s.Name.includes("SOTFSolos") &&
       s.Name.endsWith(number)
   );
 }
@@ -127,19 +140,7 @@ function findServersByMap(list, mapName) {
 }
 
 // =========================
-// 공식 서버 배율
-// =========================
-
-let rates = {
-  xp: 1,
-  harvest: 1,
-  taming: 1,
-  breeding: 1,
-  hatch: 1,
-};
-
-// =========================
-// 공식 배율 가져오기
+// 배율 업데이트
 // =========================
 
 async function updateRates() {
@@ -173,19 +174,18 @@ async function updateRates() {
     };
 
     console.log(
-      "✅ 배율 업데이트 완료",
-      rates
+      "✅ 배율 업데이트 완료"
     );
   } catch (err) {
     console.error(
-      "❌ 배율 불러오기 실패:",
+      "❌ 배율 업데이트 실패:",
       err.message
     );
   }
 }
 
 // =========================
-// 공식 공지 감지
+// 공지 감지
 // =========================
 
 async function checkNotifications() {
@@ -204,7 +204,6 @@ async function checkNotifications() {
     if (!text || text.length < 5)
       return;
 
-    // 최초 실행
     if (!lastNotification) {
       lastNotification = text;
 
@@ -215,12 +214,7 @@ async function checkNotifications() {
       return;
     }
 
-    // 새 공지 감지
     if (text !== lastNotification) {
-      console.log(
-        "📢 새로운 공지 감지"
-      );
-
       const channel =
         await client.channels.fetch(
           NOTIFICATION_CHANNEL_ID
@@ -229,10 +223,7 @@ async function checkNotifications() {
       const lowerText =
         text.toLowerCase();
 
-      // =========================
-      // 점검 시작 감지
-      // =========================
-
+      // 점검 시작
       const maintenanceKeywords = [
         "maintenance",
         "servers will go down",
@@ -264,10 +255,7 @@ async function checkNotifications() {
         });
       }
 
-      // =========================
-      // 점검 종료 감지
-      // =========================
-
+      // 점검 종료
       const recoveryKeywords = [
         "maintenance completed",
         "back online",
@@ -299,17 +287,11 @@ async function checkNotifications() {
         });
       }
 
-      // =========================
       // 일반 공지
-      // =========================
-
       const embed = new EmbedBuilder()
         .setTitle("📢 ARK 공식 공지")
         .setDescription(text)
         .setColor(0xf1c40f)
-        .setFooter({
-          text: "ARK Official Notification",
-        })
         .setTimestamp();
 
       await channel.send({
@@ -327,7 +309,7 @@ async function checkNotifications() {
 }
 
 // =========================
-// 밴 리스트 감지
+// 밴 감지
 // =========================
 
 async function checkBanList() {
@@ -336,27 +318,23 @@ async function checkBanList() {
       BANLIST_URL
     );
 
-    const text = res.data;
-
-    const lines = text
+    const lines = res.data
       .split("\n")
       .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+      .filter(Boolean);
 
-    // 최초 실행
     if (knownBans.size === 0) {
       lines.forEach((line) =>
         knownBans.add(line)
       );
 
       console.log(
-        `🔨 밴 리스트 초기화 완료 (${lines.length}명)`
+        `🔨 밴 리스트 저장 완료 (${lines.length})`
       );
 
       return;
     }
 
-    // 신규 밴 감지
     const newBans = [];
 
     for (const line of lines) {
@@ -367,12 +345,8 @@ async function checkBanList() {
       }
     }
 
-    // 신규 밴 없으면 종료
-    if (newBans.length === 0) return;
-
-    console.log(
-      `🔨 신규 밴 감지 (${newBans.length}명)`
-    );
+    if (newBans.length === 0)
+      return;
 
     const channel =
       await client.channels.fetch(
@@ -388,18 +362,18 @@ async function checkBanList() {
           .slice(0, 20)
           .map(
             (ban) =>
-              `• https://steamcommunity.com/profiles/${ban}`
+              `• ${ban}`
           )
           .join("\n")
       )
       .addFields(
         {
-          name: "📊 신규 밴 수",
+          name: "📊 New Ban Player",
           value: `\`\`\`\n${newBans.length}\n\`\`\``,
           inline: true,
         },
         {
-          name: "📦 전체 저장 수",
+          name: "📦 Total Saved Bans",
           value: `\`\`\`\n${knownBans.size}\n\`\`\``,
           inline: true,
         }
@@ -422,7 +396,7 @@ async function checkBanList() {
 }
 
 // =========================
-// 봇 시작
+// READY
 // =========================
 
 client.once("ready", async () => {
@@ -438,7 +412,7 @@ client.once("ready", async () => {
 });
 
 // =========================
-// 명령어 처리
+// Interaction
 // =========================
 
 client.on(
@@ -448,7 +422,7 @@ client.on(
       return;
 
     // =========================
-    // 조회
+    // 서버 조회
     // =========================
 
     if (interaction.commandName === "조회") {
@@ -483,59 +457,19 @@ client.on(
               {
                 name: "👥 Players",
                 value:
-                  `\`\`\`\n${server.NumPlayers}` +
-                  `/${server.MaxPlayers}\n\`\`\``,
-                inline: true,
-              },
-              {
-                name: "🟢 State",
-                value:
-                  "```yaml\n🟢 Online\n```",
-                inline: true,
-              },
-              {
-                name: "🌐 Ping",
-                value:
-                  `\`\`\`\n${server.ServerPing || 0}\n\`\`\``,
+                  `\`\`\`\n${server.NumPlayers}/${server.MaxPlayers}\n\`\`\``,
                 inline: true,
               },
               {
                 name: "🌍 Map",
                 value:
                   `\`\`\`\n${server.MapName}\n\`\`\``,
-              },
-              {
-                name: "☀️ Day Time",
-                value:
-                  `\`\`\`\n${server.DayTime || "Unknown"}\n\`\`\``,
                 inline: true,
               },
               {
-                name: "🎮 Platform",
+                name: "🌐 Ping",
                 value:
-                  `\`\`\`\n${server.PlatformType || "Unknown"}\n\`\`\``,
-                inline: true,
-              },
-              {
-                name: "⚡ Rates",
-                value:
-                  "```yaml\n" +
-                  `XP: x${rates.xp}\n` +
-                  `Harvest: x${rates.harvest}\n` +
-                  `Taming: x${rates.taming}\n` +
-                  `Breed: x${rates.breeding}\n` +
-                  `Hatch: x${rates.hatch}\n` +
-                  "```",
-              },
-              {
-                name: "🌐 Server IP",
-                value:
-                  `\`\`\`\n${server.IP}\n\`\`\``,
-              },
-              {
-                name: "🌐 Server Port",
-                value:
-                  `\`\`\`\n${server.Port}\n\`\`\``,
+                  `\`\`\`\n${server.ServerPing || 0}\n\`\`\``,
                 inline: true,
               }
             )
@@ -555,167 +489,155 @@ client.on(
     }
 
     // =========================
-// 맵 서버리스트
-// =========================
+    // 맵 서버 리스트
+    // =========================
 
-if (interaction.commandName === "맵") {
-  try {
-    const mapInput =
-      interaction.options.getString("맵");
+    if (interaction.commandName === "맵") {
+      try {
+        const mapInput =
+          interaction.options.getString(
+            "맵"
+          );
 
-    const mapName =
-      MAP_NAMES[mapInput];
+        const mapName =
+          MAP_NAMES[mapInput];
 
-    if (!mapName) {
-      return interaction.reply(
-        "❌ 지원하지 않는 맵"
-      );
-    }
+        if (!mapName) {
+          return interaction.reply(
+            "❌ 지원하지 않는 맵"
+          );
+        }
 
-    const res = await axios.get(
-      API_URL
-    );
+        const res = await axios.get(
+          API_URL
+        );
 
-    const servers =
-      findServersByMap(
-        res.data,
-        mapName
-      );
+        const servers =
+          findServersByMap(
+            res.data,
+            mapName
+          );
 
-    if (servers.length === 0) {
-      return interaction.reply(
-        "❌ 서버 없음"
-      );
-    }
+        if (servers.length === 0) {
+          return interaction.reply(
+            "❌ 서버 없음"
+          );
+        }
 
+        // 플레이어 정렬
+        servers.sort(
+          (a, b) =>
+            (b.NumPlayers || 0) -
+            (a.NumPlayers || 0)
+        );
 
-// 플레이어 많은 순 정렬
-servers.sort((a, b) => {
-  return (
-    (b.NumPlayers || 0) -
-    (a.NumPlayers || 0)
-  );
-});
+        // 서버 목록
+        const serverLines =
+          servers.map((server) => {
+            const number =
+              server.Name.match(
+                /(\d+)$/
+              )?.[1] || "Unknown";
 
-// 서버 목록 생성
-const serverLines = servers.map(
-  (server) => {
-    const number =
-      server.Name.match(/(\d+)$/)?.[1] ||
-      "Unknown";
+            const players =
+              server.NumPlayers || 0;
 
-    const players =
-      server.NumPlayers || 0;
+            const maxPlayers =
+              server.MaxPlayers || 70;
 
-    const maxPlayers =
-      server.MaxPlayers || 70;
+            let status = "🟢";
 
-    let status = "🟢";
+            if (players >= 70) {
+              status = "🔴";
+            } else if (
+              players >= 50
+            ) {
+              status = "🟡";
+            }
 
-    if (players >= 70) {
-      status = "🔴";
-    } else if (players >= 50) {
-      status = "🟡";
-    }
+          return `${server.Name} ${status} (${players}/${maxPlayers})`;
+          });
 
-    return `${server.Name} ${status} (${players}/${maxPlayers})`;
-  }
-);
+        // 40개씩 분할
+        const chunkSize = 100;
 
-// 20개씩 분할
-const chunkSize = 100;
+        const chunks = [];
 
-const chunks = [];
+        for (
+          let i = 0;
+          i < serverLines.length;
+          i += chunkSize
+        ) {
+          chunks.push(
+            serverLines.slice(
+              i,
+              i + chunkSize
+            )
+          );
+        }
 
-for (
-  let i = 0;
-  i < serverLines.length;
-  i += chunkSize
-) {
-  chunks.push(
-    serverLines.slice(i, i + chunkSize)
-  );
-}
+        const embeds = chunks.map(
+          (chunk, index) => {
+            return new EmbedBuilder()
+              .setTitle(
+                `🗺 ${mapInput} Server List`
+              )
+              .setDescription(
+                "```yaml\n" +
+                  chunk.join("\n") +
+                  "\n```"
+              )
+              .setFooter({
+                text:
+                  `페이지 ${index + 1}/${chunks.length}`,
+              })
+              .setColor(0x3498db)
+              .setTimestamp();
+          }
+        );
 
-const embeds = chunks.map(
-  (chunk, index) => {
-    return new EmbedBuilder()
-      .setTitle(
-        `🗺 ${mapInput} Server Number List`
-      )
-      .setDescription(
-        "```yaml\n" +
-          chunk.join("\n") +
-          "\n```"
-      )
-      .setFooter({
-        text:
-          `페이지 ${index + 1}/${
-            chunks.length
-          } | 🟢 Good 🟡 Half 🔴 Capped`,
-      })
-      .setColor(0x3498db)
-      .setTimestamp();
-  }
-);
+        // 통계
+        const totalPlayers =
+          servers.reduce(
+            (sum, s) =>
+              sum +
+              (s.NumPlayers || 0),
+            0
+          );
 
-// 총 플레이어 계산
-const totalPlayers = servers.reduce(
-  (sum, server) =>
-    sum + (server.NumPlayers || 0),
-  0
-);
+        embeds.push(
+          new EmbedBuilder()
+            .setTitle(
+              "📊 Server Statistics"
+            )
+            .addFields(
+              {
+                name: "🖥 Servers",
+                value:
+                  `\`\`\`\n${servers.length}\n\`\`\``,
+                inline: true,
+              },
+              {
+                name: "👥 Players",
+                value:
+                  `\`\`\`\n${totalPlayers}\n\`\`\``,
+                inline: true,
+              }
+            )
+            .setColor(0x2ecc71)
+        );
 
-// 온라인 서버 수
-const onlineServers =
-  servers.filter(
-    (s) => (s.NumPlayers || 0) >= 0
-  ).length;
+        return interaction.reply({
+          embeds: embeds.slice(0, 10),
+        });
+      } catch (err) {
+        console.error(err);
 
-// 요약 Embed 추가
-embeds.push(
-  new EmbedBuilder()
-    .setTitle("📊 Server Statistics")
-    .addFields(
-      {
-        name: "🖥 Server List",
-        value:
-          `\`\`\`\n${servers.length}\n\`\`\``,
-        inline: true,
-      },
-      {
-        name: "👥 Player List",
-        value:
-          `\`\`\`\n${totalPlayers}\n\`\`\``,
-        inline: true,
-      },
-      {
-        name: "🟢 Online Server",
-        value:
-          `\`\`\`\n${onlineServers}\n\`\`\``,
-        inline: true,
+        return interaction.reply(
+          "❌ 맵 조회 실패"
+        );
       }
-    )
-    .setColor(0x2ecc71)
-    .setFooter({
-      text: "ARK Official Server Statistics",
-    })
-    .setTimestamp()
-);
-
-// 여러 Embed 전송
-return interaction.reply({
-  embeds: embeds,
-});
-  } catch (err) {
-    console.error(err);
-
-    return interaction.reply(
-      "❌ 맵 서버 리스트 조회 실패"
-    );
-  }
-}
-
+    }
 
     // =========================
     // 채널 설정
@@ -733,12 +655,12 @@ return interaction.reply({
       updateChannelId = channel.id;
 
       return interaction.reply(
-        `✅ 업데이트 채널 설정 완료: ${channel}`
+        `✅ 채널 설정 완료: ${channel}`
       );
     }
 
     // =========================
-    // 등록
+    // 서버 등록
     // =========================
 
     if (interaction.commandName === "등록") {
@@ -772,15 +694,16 @@ return interaction.reply({
     }
 
     // =========================
-    // 해제
+    // 추적 해제
     // =========================
 
     if (interaction.commandName === "해제") {
       trackedServerNumber = null;
+
       messageId = null;
 
       return interaction.reply(
-        "🛑 서버 추적 중지됨"
+        "🛑 서버 추적 종료"
       );
     }
   }
@@ -868,10 +791,11 @@ setInterval(async () => {
           }
         );
 
-      // 플레이어 입장/퇴장 감지
+      // 입장/퇴장 감지
       if (
         Math.abs(diff) > 0 &&
-        nowTime - lastAlertTime >
+        Date.now() -
+          lastAlertTime >
           30000
       ) {
         const alertChannel =
@@ -913,29 +837,20 @@ setInterval(async () => {
               isJoin
                 ? 0x57f287
                 : 0xed4245
-            )
-            .setTimestamp();
+            );
 
         await alertChannel.send({
           embeds: [alertEmbed],
         });
 
-        lastAlertTime = nowTime;
+        lastAlertTime = Date.now();
       }
 
       lastPlayers = current;
     } else {
-      embed
-        .setDescription(
-          "🔴 서버 오프라인"
-        )
-        .addFields({
-          name: "⏱ 마지막 업데이트",
-          value: `<t:${Math.floor(
-            lastUpdateTime.getTime() /
-              1000
-          )}:R>`,
-        });
+      embed.setDescription(
+        "🔴 서버 오프라인"
+      );
     }
 
     const channel =
@@ -943,40 +858,37 @@ setInterval(async () => {
         updateChannelId
       );
 
-try {
-  const msg =
-    await channel.messages.fetch(
-      messageId
+    const msg =
+      await channel.messages.fetch(
+        messageId
+      );
+
+    await msg.edit({
+      embeds: [embed],
+    });
+  } catch (err) {
+    console.error(
+      "❌ 자동 업데이트 실패:",
+      err.message
     );
-
-  if (!msg) return;
-
-  await msg.edit({
-    embeds: [embed],
-  });
-} catch (err) {
-  console.error(
-    "❌ 메시지 수정 실패:",
-    err.message
-  );
-}
+  }
 }, 60000);
 
 // =========================
 // 자동 감시
 // =========================
 
-// 배율 갱신 (12시간)
-setInterval(updateRates, 300000);
+setInterval(updateRates, 600000);
 
-// 공지 감시 (5분)
 setInterval(
   checkNotifications,
   300000
 );
 
-// 밴 리스트 감시 (5분)
-setInterval(checkBanList, 300000);
+setInterval(
+  checkBanList,
+  300000
+);
 
 // =========================
 // 로그인
