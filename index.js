@@ -62,14 +62,14 @@ const knownBans = new Set();
 
 const MAP_NAMES = {
   TheIsland: "TheIsland",
-  "Scorched Earth": "ScorchedEarth",
-  "The Center": "TheCenter",
+  "Scorched Earth": "Scorched",
+  "The Center": "Center",
   Aberration: "Aberration",
   Extinction: "Extinction",
   Astraeos: "Astraeos",
   Ragnarok: "Ragnarok",
   Valguero: "Valguero",
-  "Lost Colony": "LostColony",
+  "Lost Colony": "Lost",
 };
 
 // =========================
@@ -107,17 +107,32 @@ let rates = {
 // 서버 필터
 // =========================
 
-function findServer(list, number) {
-  return list.find(
-    (s) =>
-      s.Name &&
-      s.Name.includes("PVP") &&
-      !s.Name.includes("SmallTribes") &&
-      !s.Name.includes("PVE") &&
-      !s.Name.includes("Conquest") &&
-      !s.Name.includes("Modded") &&
-      s.Name.endsWith(number)
-  );
+function findServersByMap(list, mapName) {
+  return list.filter((s) => {
+    if (
+      !s.Name ||
+      !s.Name.includes("PVP") ||
+      s.Name.includes("SmallTribes") ||
+      s.Name.includes("PVE") ||
+      s.Name.includes("Conquest") ||
+      s.Name.includes("Modded")
+    ) {
+      return false;
+    }
+
+    // MapName 없으면 제외
+    if (!s.MapName) return false;
+
+    const apiMap = s.MapName
+      .replace(/\s/g, "")
+      .toLowerCase();
+
+    const targetMap = mapName
+      .replace(/\s/g, "")
+      .toLowerCase();
+
+    return apiMap.includes(targetMap);
+  });
 }
 
 // =========================
