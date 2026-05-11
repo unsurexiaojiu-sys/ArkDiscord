@@ -85,6 +85,8 @@ function findServersByMap(list, mapName) {
       !s.Name.includes("PVE") &&
       !s.Name.includes("Conquest") &&
       !s.Name.includes("Modded") &&
+      !s.Name.includes("Consoles") &&
+      !s.Name.includes("Arkpocalypse") &&
       s.MapName &&
       s.MapName.toLowerCase() ===
         mapName.toLowerCase()
@@ -115,8 +117,11 @@ function findServersByMap(list, mapName) {
       s.Name.includes("SmallTribes") ||
       s.Name.includes("PVE") ||
       s.Name.includes("Conquest") ||
-      s.Name.includes("Modded")
-    ) {
+      s.Name.includes("Modded") ||
+      s.Name.includes("Arkpocalypse") ||
+      s.Name.includes("Consoles") ||
+      s.Name.includes("SOTFSolos")   
+    ){
       return false;
     }
 
@@ -585,71 +590,125 @@ if (interaction.commandName === "맵") {
       );
     }
 
-    // 서버 번호 순 정렬
-    servers.sort((a, b) => {
-      const aNum = parseInt(
-        a.Name.match(/(\d+)$/)?.[1] || 0
-      );
 
-      const bNum = parseInt(
-        b.Name.match(/(\d+)$/)?.[1] || 0
-      );
+// 플레이어 많은 순 정렬
+servers.sort((a, b) => {
+  return (
+    (b.NumPlayers || 0) -
+    (a.NumPlayers || 0)
+  );
+});
 
-      return aNum - bNum;
-    });
+// 서버 목록 생성
+const serverLines = servers.map(
+  (server) => {
+    const number =
+      server.Name.match(/(\d+)$/)?.[1] ||
+      "Unknown";
 
-    // 서버 목록 생성
-    const serverList = servers
-      .map((server) => {
-        const number =
-          server.Name.match(/(\d+)$/)?.[1] ||
-          "Unknown";
+    const players =
+      server.NumPlayers || 0;
 
-        const players =
-          server.NumPlayers || 0;
+    const maxPlayers =
+      server.MaxPlayers || 70;
 
-        const maxPlayers =
-          server.MaxPlayers || 70;
+    let status = "🟢";
 
-        const status = "🟢";
+    if (players >= 70) {
+      status = "🔴";
+    } else if (players >= 50) {
+      status = "🟡";
+    }
 
-        return `${number} ${status} (${players}/${maxPlayers})`;
+    return `${server.Name} ${status} (${players}/${maxPlayers})`;
+  }
+);
+
+// 20개씩 분할
+const chunkSize = 100;
+
+const chunks = [];
+
+for (
+  let i = 0;
+  i < serverLines.length;
+  i += chunkSize
+) {
+  chunks.push(
+    serverLines.slice(i, i + chunkSize)
+  );
+}
+
+const embeds = chunks.map(
+  (chunk, index) => {
+    return new EmbedBuilder()
+      .setTitle(
+        `🗺 ${mapInput} Server Number List`
+      )
+      .setDescription(
+        "```yaml\n" +
+          chunk.join("\n") +
+          "\n```"
+      )
+      .setFooter({
+        text:
+          `페이지 ${index + 1}/${
+            chunks.length
+          } | 🟢 Good 🟡 Half 🔴 Capped`,
       })
-      .join("\n");
+      .setColor(0x3498db)
+      .setTimestamp();
+  }
+);
 
-    const embed =
-      new EmbedBuilder()
-        .setTitle(
-          `🗺 ${mapInput} 서버 리스트`
-        )
-        .setDescription(
-          "```yaml\n" +
-            serverList +
-            "\n```"
-        )
-        .addFields(
-          {
-            name: "📊 서버 수",
-            value:
-              `\`\`\`\n${servers.length}\n\`\`\``,
-            inline: true,
-          },
-          {
-            name: "🟢 온라인",
-            value:
-              `\`\`\`\n${servers.length}\n\`\`\``,
-            inline: true,
-          }
-        )
-        .setColor(0x3498db)
-        .setFooter({
-          text: "ARK Official PVP Servers",
-        })
-        .setTimestamp();
+// 총 플레이어 계산
+const totalPlayers = servers.reduce(
+  (sum, server) =>
+    sum + (server.NumPlayers || 0),
+  0
+);
 
-    return interaction.reply({
-      embeds: [embed],
-    });
+// 온라인 서버 수
+const onlineServers =
+  servers.filter(
+    (s) => (s.NumPlayers || 0) >= 0
+  ).length;
+
+// 요약 Embed 추가
+embeds.push(
+  new EmbedBuilder()
+    .setTitle("📊 Server Statistics")
+    .addFields(
+      {
+        name: "🖥 Server List",
+        value:
+          `\`\`\`\n${servers.length}\n\`\`\``,
+        inline: true,
+      },
+      {
+        name: "👥 Player List",
+        value:
+          `\`\`\`\n${totalPlayers}\n\`\`\``,
+        inline: true,
+      },
+      {
+        name: "🟢 Online Server",
+        value:
+          `\`\`\`\n${onlineServers}\n\`\`\``,
+        inline: true,
+      }
+    )
+    .setColor(0x2ecc71)
+    .setFooter({
+      text: "ARK Official Server Statistics",
+    })
+    .setTimestamp()
+);
+
+// 여러 Embed 전송
+return interaction.reply({
+  embeds: embeds,
+});
   } catch (err) {
     console.error(err);
 
@@ -658,6 +717,7 @@ if (interaction.commandName === "맵") {
     );
   }
 }
+
 
     // =========================
     // 채널 설정
