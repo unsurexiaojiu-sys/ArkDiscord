@@ -1,43 +1,150 @@
+const { REST, Routes } =
+  require("discord.js");
+
 require("dotenv").config();
-const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 
 const commands = [
-  new SlashCommandBuilder()
-    .setName("등록")
-    .setDescription("서버 추적 시작")
-    .addStringOption(option =>
-      option.setName("서버번호").setDescription("예: 1033").setRequired(true)
-    ),
+  // =========================
+  // 조회
+  // =========================
 
-  new SlashCommandBuilder()
-    .setName("조회")
-    .setDescription("서버 조회")
-    .addStringOption(option =>
-      option.setName("서버번호").setDescription("예: 1033").setRequired(true)
-    ),
+  {
+    name: "조회",
+    description: "서버 조회",
+    options: [
+      {
+        name: "서버번호",
+        description: "서버 번호 입력",
+        type: 3,
+        required: true,
+      },
+    ],
+  },
 
-  new SlashCommandBuilder()
-    .setName("해제")
-    .setDescription("서버 추적 중지"),
+  // =========================
+  // 채널설정
+  // =========================
 
-  new SlashCommandBuilder()
-    .setName("채널설정")
-    .setDescription("업데이트 채널 설정")
-    .addChannelOption(option =>
-      option.setName("채널").setDescription("채널 선택").setRequired(true)
-    ),
-].map(cmd => cmd.toJSON());
+  {
+    name: "채널설정",
+    description: "업데이트 채널 설정",
+    options: [
+      {
+        name: "채널",
+        description: "채널 선택",
+        type: 7,
+        required: true,
+      },
+    ],
+  },
 
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
+  // =========================
+  // 등록
+  // =========================
+
+  {
+    name: "등록",
+    description: "서버 추적 시작",
+    options: [
+      {
+        name: "서버번호",
+        description: "서버 번호 입력",
+        type: 3,
+        required: true,
+      },
+    ],
+  },
+
+  // =========================
+  // 해제
+  // =========================
+
+  {
+    name: "해제",
+    description: "서버 추적 중지",
+  },
+
+  // =========================
+  // 맵 서버리스트
+  // =========================
+
+  {
+    name: "맵",
+    description: "맵 서버 리스트 조회",
+    options: [
+      {
+        name: "맵",
+        description: "맵 선택",
+        type: 3,
+        required: true,
+        choices: [
+          {
+            name: "TheIsland",
+            value: "TheIsland",
+          },
+          {
+            name: "Scorched Earth",
+            value: "Scorched Earth",
+          },
+          {
+            name: "The Center",
+            value: "The Center",
+          },
+          {
+            name: "Aberration",
+            value: "Aberration",
+          },
+          {
+            name: "Extinction",
+            value: "Extinction",
+          },
+          {
+            name: "Astraeos",
+            value: "Astraeos",
+          },
+          {
+            name: "Ragnarok",
+            value: "Ragnarok",
+          },
+          {
+            name: "Valguero",
+            value: "Valguero",
+          },
+          {
+            name: "Lost Colony",
+            value: "Lost Colony",
+          },
+        ],
+      },
+    ],
+  },
+];
+
+const rest = new REST({
+  version: "10",
+}).setToken(
+  process.env.DISCORD_BOT_TOKEN
+);
 
 (async () => {
   try {
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-      { body: commands }
+    console.log(
+      "🔄 슬래시 명령어 등록 중..."
     );
-    console.log("✅ 명령어 등록 완료");
-  } catch (err) {
-    console.error(err);
+
+    await rest.put(
+      Routes.applicationCommands(
+        process.env.CLIENT_ID
+      ),
+      {
+        body: commands,
+      }
+    );
+
+    console.log(
+      "✅ 슬래시 명령어 등록 완료"
+    );
+  } catch (error) {
+    console.error(error);
   }
 })();
