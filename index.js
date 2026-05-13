@@ -229,6 +229,9 @@ async function checkNotifications() {
         "servers will go down",
         "deploying patch",
         "offline",
+        "Wildcard",
+        "Greetings Survivors",
+        "Greetings Survivors",
         "downtime",
       ];
 
